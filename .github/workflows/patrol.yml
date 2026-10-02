@@ -1,0 +1,57 @@
+# .github/workflows/patrol.yml
+name: Intelligence Radar Scheduled Patrol
+
+on:
+  schedule:
+    # 每天 UTC 01:00 / 09:00 / 17:00 執行 (對應台灣時間 09:00 / 17:00 / 01:00)
+    - cron: "0 1,9,17 * * *"
+  workflow_dispatch: # 支援手動即時觸發
+
+jobs:
+  patrol:
+    name: Run Intelligence Pipeline
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest ruff
+          pip install -r requirements.txt
+
+      - name: Pre-flight Verification (Lint & Tests)
+        run: |
+          ruff check .
+          pytest tests/ -v
+
+      - name: Decode Service Account Key
+        env:
+          GCP_SA_KEY_BASE64: ${{ secrets.GCP_SA_KEY_BASE64 }}
+        run: |
+          # 動態將 Base64 還原為 service_account.json
+          echo "$GCP_SA_KEY_BASE64" | base64 --decode > service_account.json
+          # 設定嚴格權限避免外洩
+          chmod 600 service_account.json
+
+      - name: Execute Intelligence Pipeline
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SPREADSHEET_ID: ${{ secrets.SPREADSHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: service_account.json
+        run: |
+          python run_pipeline.py
+
+      - name: Clean up Credentials
+        if: always() # 無論執行成功或失敗皆強制執行
+        run: |
+          # 任務結束立即銷毀憑證檔案
+          rm -f service_account.json

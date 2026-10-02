@@ -8,6 +8,7 @@ from google.oauth2.service_account import Credentials
 from src.core.harmonizer import DataHarmonizer, SheetSerializer
 from src.core.models import IntelligenceItem, ItemStatus
 
+import os
 
 class SheetsAdapter:
     """Google Sheets 外部轉接器：提供符合領域模型的強型別資料庫操作介面"""
@@ -23,11 +24,22 @@ class SheetsAdapter:
         spreadsheet_name: str = "Intelligence_Radar_Hub",
         worksheet_name: str = "raw_feed",
     ):
-        creds = Credentials.from_service_account_file(
-            credentials_path, scopes=self.SCOPES
-        )
+        # 1. 優先取用環境變數指定之憑證路徑，本地預設退回 service_account.json
+        sa_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", credentials_path)
+        if not os.path.exists(sa_path):
+            raise FileNotFoundError(f"找不到服務帳號金鑰檔案: {sa_path}")
+
+        creds = Credentials.from_service_account_file(sa_path, scopes=self.SCOPES)
         self.client = gspread.authorize(creds)
-        self.sheet = self.client.open(spreadsheet_name)
+
+        # 2. 優先支援 SPREADSHEET_ID (open_by_key)，若無則依名稱開啟 (相容舊版)
+        spreadsheet_id = os.getenv("SPREADSHEET_ID")
+        if spreadsheet_id:
+            self.sheet = self.client.open_by_key(spreadsheet_id)
+        else:
+            self.sheet = self.client.open(spreadsheet_name)
+
+        # 3. 綁定工作表
         self.worksheet = self.sheet.worksheet(worksheet_name)
 
     def append_item(self, item: IntelligenceItem) -> None:

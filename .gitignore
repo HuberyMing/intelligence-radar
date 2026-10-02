@@ -19,4 +19,4 @@ service_account.json
 
 # 其他不需要的檔案
 test_connection/
-
+src/adapters/sheets_adapter_local.py
