@@ -1,0 +1,22 @@
+# .gitignore
+
+# 虛擬環境與快取
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+
+# 敏感金鑰與環境變數 (絕對不能進 Git!)
+.env
+*.json
+!package.json
+service_account.json
+
+# 作業系統系統檔
+.DS_Store
+
+# 其他不需要的檔案
+test_connection/
+

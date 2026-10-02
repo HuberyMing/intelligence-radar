@@ -1,0 +1,21 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+# 排除不需要檢查的暫存目錄與歷史檔案
+exclude = [
+    ".venv",
+    "test_connection",
+    "src/core/models_v0.py",
+    "src/core/harmonizer_v0.py",
+    "test_adapter_workflow.py",
+]
+
+[tool.ruff.lint]
+# 啟用核心檢查：E (語法/結構), F (未引用邏輯), I (Import排序)
+select = ["E", "F", "I"]
+
+# 忽略對 LLM Prompt 不合理的規則：
+# E501: 行過長 (Prompt 長文不應被強迫折行)
+# BLE001: 捕獲盲目例外 (測試腳本常圖方便寫 except Exception)
+ignore = ["E501", "BLE001"]
