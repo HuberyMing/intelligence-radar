@@ -1,5 +1,6 @@
 # src/adapters/sheets_adapter.py
 import json
+import os
 from typing import List, Optional
 
 import gspread
@@ -8,7 +9,6 @@ from google.oauth2.service_account import Credentials
 from src.core.harmonizer import DataHarmonizer, SheetSerializer
 from src.core.models import IntelligenceItem, ItemStatus
 
-import os
 
 class SheetsAdapter:
     """Google Sheets 外部轉接器：提供符合領域模型的強型別資料庫操作介面"""
