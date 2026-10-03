@@ -55,3 +55,16 @@ jobs:
         run: |
           # 任務結束立即銷毀憑證檔案
           rm -f service_account.json
+
+      # 在 .github/workflows/patrol.yml 的 jobs.patrol.steps 最後追加：
+      - name: Notify CI/CD Pipeline Crash
+        if: failure() # 只有當前面任何一個步驟失敗亮紅燈時才觸發
+        env:
+          ALERT_WEBHOOK_URL: ${{ secrets.ALERT_WEBHOOK_URL }}
+        run: |
+          if [ -n "$ALERT_WEBHOOK_URL" ]; then
+            curl -H "Content-Type: application/json" \
+                 -X POST \
+                 -d '{"content": "🚨 **[GitHub Actions 巡航失敗]** 情報雷達在測試或環境建置階段中斷，請立即前往檢視！"}' \
+                 $ALERT_WEBHOOK_URL
+          fi
