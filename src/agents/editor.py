@@ -35,7 +35,7 @@ EDITOR_SYSTEM_INSTRUCTION = """
 """
 
 class EditorAgent:
-    def __init__(self, client: genai.Client, model_name: str = "gemini-2.5-flash"):
+    def __init__(self, client: genai.Client, model_name: str = "gemini-3.8-flash"):
         self.client = client
         self.model_name = model_name
 

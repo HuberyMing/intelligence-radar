@@ -32,13 +32,15 @@ def main():
         for item in pending_items:
             try:
                 processed_item = pipeline.process_item(item)
-                sheets_adapter.update_item_status(processed_item)
+                # 傳入 item 以及其目標狀態
+                sheets_adapter.update_item_status(processed_item, processed_item.status)
                 stats[processed_item.status] = stats.get(processed_item.status, 0) + 1
             except Exception as item_err:
                 logger.error(f"條目 {item.entry_id} 處理異常: {item_err}")
                 item.status = ItemStatus.ERROR
                 item.metadata["pipeline_error"] = str(item_err)
-                sheets_adapter.update_item_status(item)
+                # 捕捉到異常時： 明確傳入 ItemStatus.ERROR
+                sheets_adapter.update_item_status(item, new_status=ItemStatus.ERROR)
                 stats[ItemStatus.ERROR] += 1
 
         # 若有處理到項目，發布巡航總結推播

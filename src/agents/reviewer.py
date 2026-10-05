@@ -49,7 +49,7 @@ REVIEWER_SYSTEM_INSTRUCTION = """
 """
 
 class ReviewerAgent:
-    def __init__(self, client: genai.Client, model_name: str = "gemini-2.5-flash", threshold: int = 60):
+    def __init__(self, client: genai.Client, model_name: str = "gemini-3.8-flash", threshold: int = 60):
         self.client = client
         self.model_name = model_name
         self.threshold = threshold

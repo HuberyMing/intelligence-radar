@@ -82,34 +82,29 @@ class SheetsAdapter:
 
         return pending_items
 
+    # src/adapters/sheets_adapter.py (推薦的重構實作) 風格 B：豐富領域模型簽章
     def update_item_status(
         self,
-        entry_id: str,
-        new_status: ItemStatus,
-        verified_score: Optional[int] = None,
-        editorial_summary: Optional[str] = None,
-        cross_impact_notes: Optional[str] = None,
+        item: IntelligenceItem,
+        new_status: Optional[ItemStatus] = None
     ) -> bool:
         """
-        依據 entry_id 定位資料行，並回填 ADK 推演層產出的審核結果
+        接收領域模型物件，自動取用其最新數據回填至 Google Sheets
         """
-        # 尋找 entry_id (位於 A 欄，Column 1)
-        cell = self.worksheet.find(entry_id, in_column=1)
-        if not cell:
+        # 若有指定新狀態則覆寫，否則沿用 item 自身狀態
+        status_to_write = new_status or item.status
+        
+        # 內部直接從 item 提取各欄位，外界呼叫極致簡潔
+        target_row = self._find_row_by_entry_id(item.entry_id)
+        if not target_row:
             return False
 
-        row = cell.row
-        # 準備批次更新的儲存格清單
-        updates = [
-            gspread.Cell(row=row, col=3, value=new_status.value)  # status
+        # 批次更新狀態、評分、總編摘要與推演筆記 (L, M, N 欄位)
+        update_cells = [
+            {"range": f"C{target_row}", "values": [[status_to_write.value if hasattr(status_to_write, 'value') else str(status_to_write)]]},
+            {"range": f"L{target_row}", "values": [[item.verified_score or item.raw_score]]},
+            {"range": f"M{target_row}", "values": [[item.editorial_summary or ""]]},
+            {"range": f"N{target_row}", "values": [[item.cross_impact_notes or ""]]},
         ]
-        if verified_score is not None:
-            updates.append(gspread.Cell(row=row, col=12, value=verified_score))
-        if editorial_summary is not None:
-            updates.append(gspread.Cell(row=row, col=13, value=editorial_summary))
-        if cross_impact_notes is not None:
-            updates.append(gspread.Cell(row=row, col=14, value=cross_impact_notes))
-
-        self.worksheet.update_cells(updates)
+        self.worksheet.batch_update(update_cells)
         return True
-    
