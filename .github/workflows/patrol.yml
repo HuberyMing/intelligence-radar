@@ -11,6 +11,7 @@ jobs:
   patrol:
     name: Run Intelligence Pipeline
     runs-on: ubuntu-latest
+    timeout-minutes: 5 # 超過 5 分鐘強制中斷，防止死鎖掛起
 
     steps:
       - name: Checkout Code
