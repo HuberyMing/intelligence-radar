@@ -2,6 +2,7 @@
 import logging
 
 from google import genai
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.agents.domain_expert import DomainExpertAgent
 from src.agents.editor import EditorAgent
@@ -18,6 +19,14 @@ class IntelligencePipeline:
         self.synthesizer = SynthesizerAgent(client)
         self.editor = EditorAgent(client)
 
+    @retry(
+        # 最多重試 3 次（含初次共 3 次）
+        stop=stop_after_attempt(3),
+        # 指數退避：初次等待 2 秒，每次翻倍 (2s -> 4s -> 8s)，上限 10 秒
+        wait=wait_exponential(multiplier=2, min=2, max=10),
+        # 只針對包含 503/429 等暫時性伺服器錯誤進行重試，其餘邏輯錯誤立即中斷
+        reraise=True,
+    )
     def process_item(self, item: IntelligenceItem) -> IntelligenceItem:
         """
         執行單一條目的完整多代理人串接管線。

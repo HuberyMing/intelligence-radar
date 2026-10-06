@@ -89,7 +89,7 @@ class SheetsAdapter:
         new_status: Optional[ItemStatus] = None
     ) -> bool:
         """
-        接收領域模型物件，自動取用其最新數據回填至 Google Sheets
+        接收領域模型物件，自動取用其最新數據回填至 Google Sheets (風格 B)
         """
         # 若有指定新狀態則覆寫，否則沿用 item 自身狀態
         status_to_write = new_status or item.status
@@ -99,12 +99,26 @@ class SheetsAdapter:
         if not target_row:
             return False
 
-        # 批次更新狀態、評分、總編摘要與推演筆記 (L, M, N 欄位)
+        # 批次更新狀態、評分、總編摘要與推演筆記 (C, L, M, N 欄位)
+        status_val = status_to_write.value if hasattr(status_to_write, "value") else str(status_to_write)
         update_cells = [
-            {"range": f"C{target_row}", "values": [[status_to_write.value if hasattr(status_to_write, 'value') else str(status_to_write)]]},
+            {"range": f"C{target_row}", "values": [[status_val]]},
             {"range": f"L{target_row}", "values": [[item.verified_score or item.raw_score]]},
             {"range": f"M{target_row}", "values": [[item.editorial_summary or ""]]},
             {"range": f"N{target_row}", "values": [[item.cross_impact_notes or ""]]},
         ]
         self.worksheet.batch_update(update_cells)
         return True
+
+    # src/adapters/sheets_adapter.py
+    def _find_row_by_entry_id(self, entry_id: str) -> Optional[int]:
+        """透過 entry_id (A 欄) 查找目標資料所在的實體列號 (Row Number)"""
+        try:
+            # 取得 A 欄 (entry_id) 的所有值
+            entry_ids = self.worksheet.col_values(1)
+            # 尋找對應 entry_id 的索引（注意：試算表列號從 1 開始計算）
+            if entry_id in entry_ids:
+                return entry_ids.index(entry_id) + 1
+            return None
+        except Exception:
+            return None
