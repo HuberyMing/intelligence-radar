@@ -2,6 +2,7 @@
 import logging
 import os
 import sys
+import time
 
 from google import genai
 
@@ -33,8 +34,10 @@ def main():
             try:
                 processed_item = pipeline.process_item(item)
                 # 傳入 item 以及其目標狀態
-                sheets_adapter.update_item_status(processed_item, processed_item.status)
+                sheets_adapter.update_item_status(processed_item)
                 stats[processed_item.status] = stats.get(processed_item.status, 0) + 1
+                # 🌟 防 429 護城河：每處理完一筆，喘口氣 10 秒
+                time.sleep(10)
             except Exception as item_err:
                 logger.error(f"條目 {item.entry_id} 處理異常: {item_err}")
                 item.status = ItemStatus.ERROR
