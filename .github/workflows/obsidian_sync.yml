@@ -1,0 +1,86 @@
+name: Intelligence Radar Patrol & Vault Sync
+
+on:
+  schedule:
+    # 每天定時 UTC 00:00 與 12:00 自動觸發 (台灣時間 08:00 與 20:00)
+    - cron: "0 0,12 * * *"
+  workflow_dispatch: # 支援手動一鍵觸發
+
+jobs:
+  patrol-and-sync:
+    name: Run Patrol and Sync to Obsidian Vault
+    runs-on: ubuntu-latest
+    timeout-minutes: 8 # 防禦型超時中斷
+
+    steps:
+      - name: Checkout Radar Repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Decrypt GCP Credentials
+        env:
+          GCP_SA_BASE64: ${{ secrets.GCP_SA_BASE64 }}
+        run: |
+          echo "$GCP_SA_BASE64" | base64 --decode > service_account.json
+
+      - name: Run Pipeline (Reviewer -> Domain Expert -> Synthesizer -> Editor)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SPREADSHEET_KEY: ${{ secrets.SPREADSHEET_KEY }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          python -m src.services.pipeline
+
+      # =========================================================================
+      # 關鍵步驟：設定 SSH Deploy Key 並 Clone 私有 Obsidian Vault
+      # =========================================================================
+      - name: Setup SSH Agent for Obsidian Vault
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VAULT_DEPLOY_KEY }}
+
+      - name: Clone Private Obsidian Vault
+        env:
+          VAULT_REPO: ${{ secrets.VAULT_REPO_SSH }}
+        run: |
+          git clone "$VAULT_REPO" obsidian_vault_target
+
+      - name: Export High-Score Intelligence to Obsidian
+        env:
+          SPREADSHEET_KEY: ${{ secrets.SPREADSHEET_KEY }}
+        run: |
+          python -m scripts.sync_to_obsidian --vault-dir ./obsidian_vault_target
+
+      # =========================================================================
+      # 關鍵步驟：檢查異動並自動 Commit & Push
+      # =========================================================================
+      - name: Commit and Push Notes to Obsidian Vault
+        run: |
+          cd obsidian_vault_target
+          git config user.name "Radar Sentinel Bot"
+          git config user.email "bot@intelligence-radar.internal"
+
+          # 檢查是否有新增或修改的 .md 檔案
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "[+] 檢測到新情報筆記，正在提交變更..."
+            git add 00_Inbox/Radar/
+            git commit -m "chore(radar): auto sync high-value intelligence [$(date +'%Y-%m-%d %H:%M')]"
+            git push origin main
+          else
+            echo "[*] 無新增情報筆記，略過 Commit。"
+          fi
+
+      - name: Cleanup Sensitive Credentials
+        if: always()
+        run: |
+          rm -f service_account.json
