@@ -1,8 +1,8 @@
 # src/agents/editor.py
 from google import genai
-from google.genai import types
 from pydantic import BaseModel, Field
 
+from src.agents.base import BaseAgent
 from src.core.models import IntelligenceItem
 
 
@@ -34,10 +34,9 @@ EDITOR_SYSTEM_INSTRUCTION = """
 語氣要求：極客、嚴謹、杜絕公關空話。輸出必須嚴格遵循指定 JSON Schema。
 """
 
-class EditorAgent:
+class EditorAgent(BaseAgent):
     def __init__(self, client: genai.Client, model_name: str = "gemini-3.8-flash"):
-        self.client = client
-        self.model_name = model_name
+        super().__init__(client, primary_model=model_name)
 
     def edit(self, item: IntelligenceItem) -> IntelligenceItem:
         """
@@ -49,7 +48,6 @@ class EditorAgent:
         # limitations_block = "\n".join([f"- {l}" for l in item.limitations]) or "無特別限制"
         # 修改為更語意化的 lim：
         limitations_block = "\n".join([f"- {lim}" for lim in item.limitations]) or "無特別限制"
-
 
         prompt = f"""
         請將以下技術情報加工編纂為最終技術短報：
@@ -64,18 +62,21 @@ class EditorAgent:
         {item.cross_impact_notes}
         """
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=EDITOR_SYSTEM_INSTRUCTION,
-                response_mime_type="application/json",
-                response_schema=EditorialResult,
-                temperature=0.2,
-            ),
-        )
+        # response = self.client.models.generate_content(
+        #     model=self.model_name,
+        #     contents=prompt,
+        #     config=types.GenerateContentConfig(
+        #         system_instruction=EDITOR_SYSTEM_INSTRUCTION,
+        #         response_mime_type="application/json",
+        #         response_schema=EditorialResult,
+        #         temperature=0.2,
+        #     ),
+        # )
+        # result = EditorialResult.model_validate_json(response.text)
 
-        result = EditorialResult.model_validate_json(response.text)
+        result, used_model = self._generate_with_fallback(
+            prompt, EditorialResult, system_instruction=EDITOR_SYSTEM_INSTRUCTION
+        )
 
         # 回填領域核心資料模型
         item.editorial_summary = f"### {result.headline}\n\n{result.editorial_summary}"

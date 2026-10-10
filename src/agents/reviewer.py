@@ -2,9 +2,9 @@
 from typing import Literal, Tuple
 
 from google import genai
-from google.genai import types
 from pydantic import BaseModel, Field
 
+from src.agents.base import BaseAgent  # 1. 匯入 BaseAgent
 from src.core.models import IntelligenceItem, ItemStatus
 
 
@@ -48,10 +48,11 @@ REVIEWER_SYSTEM_INSTRUCTION = """
 輸出必須嚴格符合指定 JSON 結構。
 """
 
-class ReviewerAgent:
+class ReviewerAgent(BaseAgent):  # 2. 繼承 BaseAgent
     def __init__(self, client: genai.Client, model_name: str = "gemini-3.8-flash", threshold: int = 60):
-        self.client = client
-        self.model_name = model_name
+        super().__init__(client, primary_model=model_name)
+        # self.client = client       # 可省略（BaseAgent 已經有 self.client）
+        # self.model_name = model_name # 可省略（BaseAgent 已經有 self.primary_model）
         self.threshold = threshold
 
     def evaluate(self, item: IntelligenceItem) -> Tuple[IntelligenceItem, bool]:
@@ -68,18 +69,24 @@ class ReviewerAgent:
         {item.raw_content}
         """
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=REVIEWER_SYSTEM_INSTRUCTION,
-                response_mime_type="application/json",
-                response_schema=ReviewResult,
-                temperature=0.1,  # 低隨機性以維持客觀嚴謹
-            ),
+        # 3. 改用基底提供的方法呼叫，一行搞定！
+        result, used_model = self._generate_with_fallback(
+            prompt, ReviewResult, system_instruction=REVIEWER_SYSTEM_INSTRUCTION
         )
 
-        result = ReviewResult.model_validate_json(response.text)
+        # response = self.client.models.generate_content(
+        #     model=self.model_name,
+        #     contents=prompt,
+        #     config=types.GenerateContentConfig(
+        #         system_instruction=REVIEWER_SYSTEM_INSTRUCTION,
+        #         response_mime_type="application/json",
+        #         response_schema=ReviewResult,
+        #         temperature=0.1,  # 低隨機性以維持客觀嚴謹
+        #     ),
+        # )
+
+        # 直接拿到 ReviewResult 物件！
+        item.metadata["analyzed_by_model"] = used_model
         
         # 回填核心領域模型
         item.raw_score = result.raw_score

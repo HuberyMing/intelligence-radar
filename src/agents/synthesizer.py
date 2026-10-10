@@ -2,9 +2,9 @@
 from typing import Literal
 
 from google import genai
-from google.genai import types
 from pydantic import BaseModel, Field
 
+from src.agents.base import BaseAgent
 from src.core.models import IntelligenceItem
 
 
@@ -53,10 +53,9 @@ SYNTHESIZER_SYSTEM_INSTRUCTION = """
 請以客觀、具預見性且邏輯嚴密的工程視角輸出指定 JSON Schema。
 """
 
-class SynthesizerAgent:
+class SynthesizerAgent(BaseAgent):
     def __init__(self, client: genai.Client, model_name: str = "gemini-3.8-flash"):
-        self.client = client
-        self.model_name = model_name
+        super().__init__(client, primary_model=model_name)
 
     def synthesize(self, item: IntelligenceItem) -> IntelligenceItem:
         """
@@ -81,18 +80,21 @@ class SynthesizerAgent:
         {item.metadata.get("expert_takeaway", item.raw_content[:400])}
         """
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=SYNTHESIZER_SYSTEM_INSTRUCTION,
-                response_mime_type="application/json",
-                response_schema=SynthesizerResult,
-                temperature=0.3,
-            ),
-        )
+        # response = self.client.models.generate_content(
+        #     model=self.model_name,
+        #     contents=prompt,
+        #     config=types.GenerateContentConfig(
+        #         system_instruction=SYNTHESIZER_SYSTEM_INSTRUCTION,
+        #         response_mime_type="application/json",
+        #         response_schema=SynthesizerResult,
+        #         temperature=0.3,
+        #     ),
+        # )
+        # result = SynthesizerResult.model_validate_json(response.text)
 
-        result = SynthesizerResult.model_validate_json(response.text)
+        result, used_model = self._generate_with_fallback(
+            prompt, SynthesizerResult, system_instruction=SYNTHESIZER_SYSTEM_INSTRUCTION
+        )
 
         # 寫入領域核心模型
         item.cross_impact_notes = result.cross_impact_notes

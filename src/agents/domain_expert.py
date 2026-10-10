@@ -1,8 +1,8 @@
 # src/agents/domain_expert.py
 from google import genai
-from google.genai import types
 from pydantic import BaseModel, Field
 
+from src.agents.base import BaseAgent
 from src.core.models import IntelligenceItem
 
 
@@ -43,10 +43,9 @@ DOMAIN_EXPERT_SYSTEM_INSTRUCTION = """
 輸出必須完全符合所指定的 JSON Schema。
 """
 
-class DomainExpertAgent:
+class DomainExpertAgent(BaseAgent):
     def __init__(self, client: genai.Client, model_name: str = "gemini-3.8-flash"):
-        self.client = client
-        self.model_name = model_name
+        super().__init__(client, primary_model=model_name)
 
     def analyze(self, item: IntelligenceItem) -> IntelligenceItem:
         """
@@ -61,23 +60,27 @@ class DomainExpertAgent:
         {item.raw_content}
         """
 
-        response = self.client.models.generate_content(
-            model=self.model_name,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=DOMAIN_EXPERT_SYSTEM_INSTRUCTION,
-                response_mime_type="application/json",
-                response_schema=ExpertAnalysisResult,
-                temperature=0.2,
-            ),
+        result, used_model = self._generate_with_fallback(
+            prompt, ExpertAnalysisResult, system_instruction=DOMAIN_EXPERT_SYSTEM_INSTRUCTION
         )
 
-        analysis = ExpertAnalysisResult.model_validate_json(response.text)
+        # response = self.client.models.generate_content(
+        #     model=self.model_name,
+        #     contents=prompt,
+        #     config=types.GenerateContentConfig(
+        #         system_instruction=DOMAIN_EXPERT_SYSTEM_INSTRUCTION,
+        #         response_mime_type="application/json",
+        #         response_schema=ExpertAnalysisResult,
+        #         temperature=0.2,
+        #     ),
+        # )
+        # analysis = ExpertAnalysisResult.model_validate_json(response.text)
 
         # 回填領域核心資料模型
-        item.verified_score = analysis.verified_score
-        item.metrics = analysis.key_metrics
-        item.limitations = analysis.limitations
-        item.metadata["expert_takeaway"] = analysis.technical_takeaway
+        item.verified_score = result.verified_score
+        item.metrics = result.metrics or item.metrics
+        item.limitations = result.limitations or item.limitations
+
+        item.metadata["expert_takeaway"] = result.technical_takeaway
 
         return item
