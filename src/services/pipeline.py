@@ -1,5 +1,6 @@
 # src/services/pipeline.py
 import logging
+import time
 
 from google import genai
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -45,14 +46,17 @@ class IntelligencePipeline:
             if not should_continue:
                 logger.warning(f"條目 [{item.entry_id}] 未達門檻 (得分: {item.raw_score})，熔斷歸檔。")
                 return item
+            time.sleep(12)  # 均勻節奏：確保每分鐘不超過 5 次 (60s / 5 = 12s)
 
             # 2. Domain Expert 專家提煉 (帶重試)
             logger.info(f"條目 [{item.entry_id}] 通過初審，進入 Domain Expert 深入萃取。")
             item = self._execute_stage_with_retry(self.expert.analyze, item)
+            time.sleep(12)
 
             # 3. Synthesizer 跨領域推演: 綜合研判與二階推演 (帶重試)
             logger.info(f"條目 [{item.entry_id}] 進入 Synthesizer 進行跨領域影響推演。")
             item = self._execute_stage_with_retry(self.synthesizer.synthesize, item)
+            time.sleep(12)
 
             # 4. Editor 總編潤飾: 編定稿與排版成型 (帶重試)
             logger.info(f"條目 [{item.entry_id}] 進入 Editor 進行最終摘要定稿。")
