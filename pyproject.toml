@@ -11,6 +11,11 @@ exclude = [
     "test_adapter_workflow.py",
 ]
 
+dependencies = [
+    # ... 現有套件
+    "jinja2>=3.1.0",
+]
+
 [tool.ruff.lint]
 # 啟用核心檢查：E (語法/結構), F (未引用邏輯), I (Import排序)
 select = ["E", "F", "I"]
