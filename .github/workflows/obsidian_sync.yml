@@ -29,9 +29,19 @@ jobs:
 
       - name: Decrypt GCP Credentials
         env:
-          GCP_SA_BASE64: ${{ secrets.GCP_SA_BASE64 }}
+          GCP_SA_KEY_BASE64: ${{ secrets.GCP_SA_KEY_BASE64 }}
         run: |
-          echo "$GCP_SA_BASE64" | base64 --decode > service_account.json
+          if [ -z "$GCP_SA_KEY_BASE64" ]; then
+            echo "❌ Error: GCP_SA_KEY_BASE64 secret is not set!"
+            exit 1
+          fi
+          echo "$GCP_SA_KEY_BASE64" | base64 --decode > service_account.json
+          if [ ! -s service_account.json ]; then
+            echo "❌ Error: service_account.json is empty!"
+            exit 1
+          fi
+          python -c "import json; json.load(open('service_account.json'))"
+          echo "✔ GCP credentials successfully decoded"
 
       - name: Run Pipeline (Reviewer -> Domain Expert -> Synthesizer -> Editor)
         env:
