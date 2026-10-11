@@ -1,10 +1,11 @@
 # scripts/sync_to_obsidian.py
-import os
 import argparse
 import logging
+import os
 from pathlib import Path
-from src.adapters.sheets_adapter import SheetsAdapter
+
 from src.adapters.obsidian_adapter import ObsidianVaultAdapter
+from src.adapters.sheets_adapter import SheetsAdapter
 
 logging.basicConfig(
     level=logging.INFO,
