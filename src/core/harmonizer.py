@@ -49,11 +49,25 @@ class DataHarmonizer:
         將前端輸入標準化為完整 15 欄合約
         自動處理預設值、欄位映射與型別容錯
         """
-        # 1. 提取或生成主鍵與時間 (使用容錯時間解析)
+        # 1. 提取或生成主鍵與時間 (容錯解析)
         entry_id = raw_payload.get("entry_id") or str(uuid.uuid4())[:8]
         timestamp = DataHarmonizer._parse_timestamp(raw_payload.get("timestamp"))
 
-        # 2. 提取或打包自訂 metadata
+        # 2. 狀態容錯對齊 (若原本有狀態則保留，若無則預設為 PENDING)
+        raw_status = raw_payload.get("status")
+        try:
+            status = ItemStatus(raw_status) if raw_status else ItemStatus.PENDING
+        except ValueError:
+            status = ItemStatus.PENDING
+
+        # 3. 評分轉換容錯 (同時支援 verified_score 與 raw_score)
+        raw_verified = raw_payload.get("verified_score")
+        try:
+            verified_score = int(raw_verified) if raw_verified not in (None, "") else None
+        except (ValueError, TypeError):
+            verified_score = None
+
+        # 4. 提取或打包自訂 metadata
         core_fields = {
             "entry_id", "timestamp", "status", "domain", "track",
             "source_title", "source_url", "raw_content", "metrics",
@@ -61,28 +75,27 @@ class DataHarmonizer:
             "editorial_summary", "cross_impact_notes", "metadata"
         }
         
-        # 既有的 metadata 加上未在核心定義的外掛欄位
         merged_metadata = dict(raw_payload.get("metadata", {}))
         for k, v in raw_payload.items():
-            if k not in core_fields:
+            if k not in core_fields and v != "":
                 merged_metadata[k] = v
 
-        # 3. 建立並嚴格驗證 Pydantic 物件
+        # 5. 建立並嚴格驗證 Pydantic 物件
         item = IntelligenceItem(
             entry_id=str(entry_id),
             timestamp=timestamp,
-            status=ItemStatus.PENDING,  # 強制鎖定為待處理
-            domain=raw_payload["domain"],
-            track=raw_payload["track"],
-            source_title=str(raw_payload["source_title"]).strip(),
-            source_url=str(raw_payload["source_url"]).strip(),
-            raw_content=str(raw_payload["raw_content"]).strip(),
+            status=status,
+            domain=raw_payload.get("domain", "GENERAL"),
+            track=raw_payload.get("track", "DEFAULT"),
+            source_title=str(raw_payload.get("source_title", "Untitled")).strip(),
+            source_url=str(raw_payload.get("source_url", "")).strip(),
+            raw_content=str(raw_payload.get("raw_content", "")).strip(),
             metrics=raw_payload.get("metrics") or None,
             limitations=raw_payload.get("limitations") or None,
             raw_score=int(raw_payload.get("raw_score", 3)),
-            verified_score=None,
-            editorial_summary=None,
-            cross_impact_notes=None,
+            verified_score=verified_score,
+            editorial_summary=raw_payload.get("editorial_summary") or None,
+            cross_impact_notes=raw_payload.get("cross_impact_notes") or None,
             metadata=merged_metadata
         )
         return item
