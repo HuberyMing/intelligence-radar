@@ -3,9 +3,11 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+
 from jinja2 import Template
-from src.ports.knowledge_sync import KnowledgeSyncPort
+
 from src.core.models import IntelligenceItem
+from src.ports.knowledge_sync import KnowledgeSyncPort
 
 OBSIDIAN_TEMPLATE = """---
 id: "{{ item.entry_id }}"
