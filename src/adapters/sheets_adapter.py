@@ -1,5 +1,6 @@
 # src/adapters/sheets_adapter.py
 import json
+import logging
 import os
 from typing import List, Optional
 
@@ -8,6 +9,8 @@ from google.oauth2.service_account import Credentials
 
 from src.core.harmonizer import DataHarmonizer, SheetSerializer
 from src.core.models import IntelligenceItem, ItemStatus
+
+logger = logging.getLogger(__name__)
 
 
 class SheetsAdapter:
@@ -46,6 +49,47 @@ class SheetsAdapter:
         """寫入單一標準情報條目至試算表末端"""
         row_data = SheetSerializer.to_row(item)
         self.worksheet.append_row(row_data)
+
+    def fetch_processed_items(self, min_score: int = 4) -> list[IntelligenceItem]:
+        """從 raw_feed 工作表中提取 status 為 PROCESSED 且 verified_score >= min_score 的高價值情報。"""
+        try:
+            records = self.worksheet.get_all_records()
+        except Exception as e:
+            logger.error(f"讀取工作表資料失敗: {e}")
+            return []
+
+        processed_items: list[IntelligenceItem] = []
+
+        for record in records:
+            # 1. 比對狀態 (Row 5 和 Row 7 的 status 是 PROCESSED)
+            status = str(record.get("status", "")).strip().upper()
+            if status != ItemStatus.PROCESSED.value:
+                continue
+
+            # 2. 正確讀取 verified_score 欄位
+            raw_score = record.get("verified_score") or record.get("raw_score") or 0
+            try:
+                score = float(raw_score)
+            except (ValueError, TypeError):
+                score = 0.0
+
+            if score >= min_score:
+                try:
+                    # 3. 反序列化 metadata（與 fetch_pending_items 保持一致）
+                    raw_meta = record.get("metadata", "{}")
+                    record["metadata"] = (
+                        json.loads(raw_meta) if isinstance(raw_meta, str) and raw_meta else {}
+                    )
+
+                    # 4. 使用專案原有的 Harmonizer 還原為強型別物件
+                    item = DataHarmonizer.normalize(record)
+                    processed_items.append(item)
+                except Exception as parse_err:
+                    logger.warning(f"解析資料列失敗 [{record.get('entry_id')}]: {parse_err}")
+                    continue
+
+        return processed_items
+
 
     def fetch_pending_items(self, auto_lock: bool = True) -> List[IntelligenceItem]:
         """
