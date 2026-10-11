@@ -1,7 +1,9 @@
 # src/ports/knowledge_sync.py
 from abc import ABC, abstractmethod
-from typing import List, Dict
+from typing import Dict, List
+
 from src.core.models import IntelligenceItem
+
 
 class KnowledgeSyncPort(ABC):
     @abstractmethod
