@@ -4,12 +4,16 @@ import os
 import sys
 import time
 
+from dotenv import load_dotenv
 from google import genai
 
 from src.adapters.notifier import WebhookNotifier
 from src.adapters.sheets_adapter import SheetsAdapter
 from src.core.models import ItemStatus
 from src.services.pipeline import IntelligencePipeline
+
+load_dotenv()  # 這行會自動讀取 .env 中的變數
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
