@@ -86,14 +86,30 @@ class ReviewerAgent(BaseAgent):  # 2. 繼承 BaseAgent
         # )
 
         # 直接拿到 ReviewResult 物件！
-        item.metadata["analyzed_by_model"] = used_model
-        
         # 回填核心領域模型
-        item.raw_score = result.raw_score
+        item.metadata["analyzed_by_model"] = used_model
+        item.metadata["reviewer_100_scale_score"] = result.raw_score
         item.metadata["reviewer_decision"] = result.decision
         item.metadata["reviewer_reason"] = result.reason
         if result.key_metrics_found and not item.metrics:
             item.metrics = result.key_metrics_found
+
+        # 將 0-100 分轉換為 1-5 星級評分
+        # 90-100: 5星, 80-89: 4星, 70-79: 3星, 60-69: 2星, <60: 1星
+        if result.raw_score >= 90:
+            star_score = 5
+        elif result.raw_score >= 80:
+            star_score = 4
+        elif result.raw_score >= 70:
+            star_score = 3
+        elif result.raw_score >= 60:
+            star_score = 2
+        else:
+            star_score = 1
+
+        # 回填符合 IntelligenceItem 規格 (<= 5) 的評分
+        item.raw_score = star_score
+        item.verified_score = star_score  # 同步填入 verified_score 供戰情室與 Obsidian 讀取
 
         # Early-exit 狀態機轉移判定
         if result.raw_score >= self.threshold and result.decision.upper() == "PASS":
@@ -104,3 +120,4 @@ class ReviewerAgent(BaseAgent):  # 2. 繼承 BaseAgent
             item.status = ItemStatus.ARCHIVED
             item.editorial_summary = f"[雜訊過濾歸檔] {result.reason}"
             return item, False
+
