@@ -12,18 +12,18 @@ logger = logging.getLogger(__name__)
 
 class BaseAgent:
 
-  def __init__(
-      self,
-      client: genai.Client,
-      primary_model: str = "gemini-3.8-flash",
-      fallback_models: Optional[List[str]] = None,
-  ):
-    self.client = client
-    self.primary_model = primary_model
-    # 預設備援清單：若主力 503，降級至 gemini-3.8-flash-lite
-    self.models_to_try = [primary_model] + (
-        fallback_models or ["gemini-3.8-flash-lite"]
-    )
+    def __init__(
+        self,
+        client: genai.Client,
+        primary_model: str = "gemini-3.8-flash",
+        fallback_models: Optional[List[str]] = None,
+    ):
+        self.client = client
+        self.primary_model = primary_model
+        # 預設備援清單：若主力 503，降級至 gemini-3.8-flash-lite
+        self.models_to_try = [primary_model] + (
+            fallback_models or ["gemini-3.8-flash-lite"]
+        )
 
     def _generate_with_fallback(
         self, prompt: str, schema: Any, system_instruction: Optional[str] = None
@@ -73,4 +73,3 @@ class BaseAgent:
                 raise e
 
         raise last_exception
-    
