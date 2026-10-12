@@ -69,10 +69,14 @@ class IntelligencePipeline:
 
         except Exception as e:
             err_str = str(e)
+            logger.error(f"處理情資 [{item.entry_id}] 遭遇未捕獲例外: {err_str}", exc_info=True)
+
             # 若主力模型遇到 503 伺服器尖峰，記錄並拋給上層標記 ERROR，不卡住其他條目
             if "503" in err_str or "UNAVAILABLE" in err_str:
                 logger.warning(
                     f"條目 [{item.entry_id}] 遭遇 Google 503 尖峰，已耗盡重試配額。"
                 )
-            raise e
-
+            # raise e # 這個例外就會把整個程式炸飛
+            item.status = ItemStatus.ERROR
+            item.metadata["error_reason"] = err_str
+            return item
