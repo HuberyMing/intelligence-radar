@@ -20,10 +20,18 @@ class BaseAgent:
     ):
         self.client = client
         self.primary_model = primary_model
-        # 預設備援清單：若主力 503，降級至 gemini-3.8-flash-lite
+        
+        # 依序降級：主力 (3.8) -> 官方推薦標準 (3.6) -> 備援模型
+        default_fallbacks = [
+            "gemini-3.6-flash",
+            "gemini-3.8-flash-lite",
+            "gemini-2.0-flash",
+        ]
+        
         self.models_to_try = [primary_model] + (
-            fallback_models or ["gemini-3.8-flash-lite"]
+            fallback_models if fallback_models is not None else default_fallbacks
         )
+
 
     def _generate_with_fallback(
         self, prompt: str, schema: Any, system_instruction: Optional[str] = None
