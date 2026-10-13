@@ -26,6 +26,7 @@ class BaseAgent:
         # 只保留 2026 當前真正合法存在且支援 generateContent 的型號
         default_fallbacks = [
             "gemini-3.6-flash",
+            "gemini-2.5-pro",  # 當 Flash 系列遭遇全面高負載時的第三防線
         ]
         self.models_to_try = [primary_model] + (
             fallback_models if fallback_models is not None else default_fallbacks
@@ -42,10 +43,11 @@ class BaseAgent:
         if not active_models:
             active_models = self.models_to_try  # 若全部都被黑名單，退回最後嘗試
 
+        # 採用遞增退避（3s ➔ 6s ➔ 10s），給伺服器足夠的排隊緩衝時間
         for model_name in active_models:
-            # 單一模型最多嘗試 3 次 (處理 503 抖動或 429 速率冷卻)
+            # 提高至最多 3 次重試，拉長尖峰緩衝 (單一模型最多嘗試 3 次: 處理 503 抖動或 429 速率冷卻)
             for attempt in range(3):
-                try:
+                try:        # ... generate_content ...
                     config_kwargs = {
                         "response_mime_type": "application/json",
                         "response_schema": schema,
@@ -67,11 +69,12 @@ class BaseAgent:
                         result = json.loads(response.text)
                     return result, model_name
 
+                
                 except Exception as e:
                     last_exception = e
                     err_msg = str(e)
 
-                    # 情境 A：429 RESOURCE_EXHAUSTED
+                    # 情境 A：429 RESOURCE_EXHAUSTED -> (PerDay 標記黑名單 / PerMinute 冷卻 15 秒)
                     if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg:
                         # 情況 A-1：每日限額用光 (PerDay) -> 加入全域黑名單，換下一個模型
                         if "PerDay" in err_msg or "day" in err_msg.lower():
@@ -88,14 +91,16 @@ class BaseAgent:
                             time.sleep(15)
                             continue
 
-                    # 情境 B：503 暫時伺服器抖動 -> 原地等待 3 秒後重試
+                    # 情境 B：503 處理 -> 遞增退避 (3s -> 6s -> 10s)
                     if "503" in err_msg or "UNAVAILABLE" in err_msg:
+                        wait_seconds = (attempt + 1) * 3 + (attempt * 1)  # 3s -> 7s -> 11s
                         if attempt < 2:
-                            logger.info(f"模型 [{model_name}] 遭遇 503 尖峰，等待 3 秒後原地重試...")
-                            time.sleep(3)
+                            logger.info(f"模型 [{model_name}] 遭遇 503 尖峰，等待 {wait_seconds} 秒後原地重試 (第 {attempt+1} 次)...")
+                            time.sleep(wait_seconds)
                             continue
                         elif model_name != active_models[-1]:
-                            logger.warning(f"模型 [{model_name}] 重試仍為 503，切換至備援模型...")
+                            logger.warning(f"模型 [{model_name}] 重試 3 次仍為 503，切換至備援模型...")
+                            time.sleep(3)
                             break
 
                     # 其他嚴重邏輯錯誤或已無備援
