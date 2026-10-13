@@ -26,7 +26,7 @@ class BaseAgent:
         # 只保留 2026 當前真正合法存在且支援 generateContent 的型號
         default_fallbacks = [
             "gemini-3.6-flash",
-            "gemini-2.5-pro",  # 當 Flash 系列遭遇全面高負載時的第三防線
+            "gemini-3.5-flash-lite",  # 當 Flash 系列遭遇全面高負載時的第三防線
         ]
         self.models_to_try = [primary_model] + (
             fallback_models if fallback_models is not None else default_fallbacks
