@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.base import BaseAgent
 from src.core.models import IntelligenceItem
-
+from src.core.harmonizer import DataHarmonizer
 
 # =====================================================================
 # 2. Domain Expert Agent (Day 14): 深度指標萃取與限制挑戰
@@ -77,7 +77,10 @@ class DomainExpertAgent(BaseAgent):
         # analysis = ExpertAnalysisResult.model_validate_json(response.text)
 
         # 回填領域核心資料模型
-        item.verified_score = result.verified_score
+        # 安全轉換 0-100 為 1-5
+        item.verified_score = DataHarmonizer.scale_100_to_5(result.verified_score)
+        item.metadata["expert_raw_100_score"] = result.verified_score
+
         item.metrics = result.metrics or item.metrics
         item.limitations = result.limitations or item.limitations
 

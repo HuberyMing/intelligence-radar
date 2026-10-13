@@ -11,6 +11,35 @@ class DataHarmonizer:
     """異構資料對齊轉換器：將各收集端原始字典轉換為標準 IntelligenceItem"""
 
     @staticmethod
+    def scale_100_to_5(score: int | float | None) -> int:
+        """
+        將 0-100 分量表轉換為領域模型的 1-5 星級量表。
+        若已經是 1-5 則直接保留。
+        """
+        if score is None:
+            return 1
+        try:
+            val = float(score)
+        except (ValueError, TypeError):
+            return 1
+
+        # 若已經是 1-5 分制
+        if 1 <= val <= 5:
+            return int(round(val))
+        
+        # 100 分制正規化映射
+        if val >= 90:
+            return 5
+        elif val >= 80:
+            return 4
+        elif val >= 70:
+            return 3
+        elif val >= 60:
+            return 2
+        else:
+            return 1
+
+    @staticmethod
     def _parse_timestamp(ts: Any) -> datetime:
         """容錯時間解析器：處理 Google Sheets 各種非標準時間字串"""
         if isinstance(ts, datetime):
@@ -60,12 +89,15 @@ class DataHarmonizer:
         except ValueError:
             status = ItemStatus.PENDING
 
-        # 3. 評分轉換容錯 (同時支援 verified_score 與 raw_score)
+        # 3. 評分轉換容錯：整合 scale_100_to_5，即使傳入 75 也會安全轉成 3 星！
         raw_verified = raw_payload.get("verified_score")
-        try:
-            verified_score = int(raw_verified) if raw_verified not in (None, "") else None
-        except (ValueError, TypeError):
+        if raw_verified not in (None, ""):
+            verified_score = DataHarmonizer.scale_100_to_5(raw_verified)
+        else:
             verified_score = None
+
+        raw_score_input = raw_payload.get("raw_score", 3)
+        raw_score = DataHarmonizer.scale_100_to_5(raw_score_input)
 
         # 4. 提取或打包自訂 metadata
         core_fields = {
@@ -80,7 +112,7 @@ class DataHarmonizer:
             if k not in core_fields and v != "":
                 merged_metadata[k] = v
 
-        # 5. 建立並嚴格驗證 Pydantic 物件
+        # 5. 建立並嚴格驗證 Pydantic 物件 (此時的分數百分之百在 1-5 之間)
         item = IntelligenceItem(
             entry_id=str(entry_id),
             timestamp=timestamp,
@@ -92,14 +124,13 @@ class DataHarmonizer:
             raw_content=str(raw_payload.get("raw_content", "")).strip(),
             metrics=raw_payload.get("metrics") or None,
             limitations=raw_payload.get("limitations") or None,
-            raw_score=int(raw_payload.get("raw_score", 3)),
+            raw_score=raw_score,
             verified_score=verified_score,
             editorial_summary=raw_payload.get("editorial_summary") or None,
             cross_impact_notes=raw_payload.get("cross_impact_notes") or None,
             metadata=merged_metadata
         )
-        return item
-
+        return item        
 
 class SheetSerializer:
     """負責將 IntelligenceItem 映射至 Google Sheets A~O 欄位"""

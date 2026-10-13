@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from src.agents.base import BaseAgent  # 1. 匯入 BaseAgent
 from src.core.models import IntelligenceItem, ItemStatus
-
+from src.core.harmonizer import DataHarmonizer
 
 # =====================================================================
 # 1. Reviewer Agent (Day 13): 初審評分與二分流決策
@@ -94,18 +94,20 @@ class ReviewerAgent(BaseAgent):  # 2. 繼承 BaseAgent
         if result.key_metrics_found and not item.metrics:
             item.metrics = result.key_metrics_found
 
-        # 將 0-100 分轉換為 1-5 星級評分
-        # 90-100: 5星, 80-89: 4星, 70-79: 3星, 60-69: 2星, <60: 1星
-        if result.raw_score >= 90:
-            star_score = 5
-        elif result.raw_score >= 80:
-            star_score = 4
-        elif result.raw_score >= 70:
-            star_score = 3
-        elif result.raw_score >= 60:
-            star_score = 2
-        else:
-            star_score = 1
+        # # 將 0-100 分轉換為 1-5 星級評分
+        # # 90-100: 5星, 80-89: 4星, 70-79: 3星, 60-69: 2星, <60: 1星
+        # if result.raw_score >= 90:
+        #     star_score = 5
+        # elif result.raw_score >= 80:
+        #     star_score = 4
+        # elif result.raw_score >= 70:
+        #     star_score = 3
+        # elif result.raw_score >= 60:
+        #     star_score = 2
+        # else:
+        #     star_score = 1
+
+        star_score = DataHarmonizer.scale_100_to_5(result.raw_score)
 
         # 回填符合 IntelligenceItem 規格 (<= 5) 的評分
         item.raw_score = star_score
