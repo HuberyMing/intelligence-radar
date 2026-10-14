@@ -6,6 +6,7 @@ from src.agents.base import BaseAgent
 from src.core.harmonizer import DataHarmonizer
 from src.core.models import IntelligenceItem
 
+
 # =====================================================================
 # 2. Domain Expert Agent (Day 14): 深度指標萃取與限制挑戰
 # =====================================================================
