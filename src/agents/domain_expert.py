@@ -82,7 +82,9 @@ class DomainExpertAgent(BaseAgent):
         star_score = DataHarmonizer.scale_100_to_5(result.verified_score)
         item.verified_score = star_score
         item.metadata["expert_raw_100_score"] = result.verified_score
-        item.metadata["expert_used_model"] = used_model
+
+        # DomainExpertAgent
+        item.metadata["expert_model"] = used_model
         item.metadata["expert_takeaway"] = result.technical_takeaway
 
         # 2. 正確取用 key_metrics，並組裝為字串回填

@@ -78,6 +78,9 @@ class EditorAgent(BaseAgent):
             prompt, EditorialResult, system_instruction=EDITOR_SYSTEM_INSTRUCTION
         )
 
+        # EditorAgent
+        item.metadata["editor_model"] = used_model
+
         # 回填領域核心資料模型
         item.editorial_summary = f"### {result.headline}\n\n{result.editorial_summary}"
         item.metadata["editorial_tags"] = result.tags

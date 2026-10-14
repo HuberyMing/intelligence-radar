@@ -88,7 +88,9 @@ class ReviewerAgent(BaseAgent):  # 2. 繼承 BaseAgent
 
         # 直接拿到 ReviewResult 物件！
         # 回填核心領域模型
-        item.metadata["analyzed_by_model"] = used_model
+        # ReviewerAgent
+        item.metadata["reviewer_model"] = used_model
+
         item.metadata["reviewer_100_scale_score"] = result.raw_score
         item.metadata["reviewer_decision"] = result.decision
         item.metadata["reviewer_reason"] = result.reason

@@ -96,6 +96,9 @@ class SynthesizerAgent(BaseAgent):
             prompt, SynthesizerResult, system_instruction=SYNTHESIZER_SYSTEM_INSTRUCTION
         )
 
+        # SynthesizerAgent
+        item.metadata["synthesizer_model"] = used_model
+
         # 寫入領域核心模型
         item.cross_impact_notes = result.cross_impact_notes
         item.metadata["synthesizer_vectors"] = [v.model_dump() for v in result.impact_vectors]
