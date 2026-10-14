@@ -49,7 +49,7 @@ jobs:
           SPREADSHEET_KEY: ${{ secrets.SPREADSHEET_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
-          run: python run_pipeline.py
+          python run_pipeline.py
 
       # =========================================================================
       # 關鍵步驟：設定 SSH Deploy Key 並 Clone 私有 Obsidian Vault
