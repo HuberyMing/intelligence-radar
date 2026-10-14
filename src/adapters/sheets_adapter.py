@@ -133,23 +133,31 @@ class SheetsAdapter:
         new_status: Optional[ItemStatus] = None
     ) -> bool:
         """
-        接收領域模型物件，自動取用其最新數據回填至 Google Sheets (風格 B)
+        風格 B：
+        接收領域模型物件，自動取用其最新數據回填至 Google Sheets (包含 metadata)
         """
         # 若有指定新狀態則覆寫，否則沿用 item 自身狀態
         status_to_write = new_status or item.status
-        
+
         # 內部直接從 item 提取各欄位，外界呼叫極致簡潔
         target_row = self._find_row_by_entry_id(item.entry_id)
         if not target_row:
             return False
 
-        # 批次更新狀態、評分、總編摘要與推演筆記 (C, L, M, N 欄位)
         status_val = status_to_write.value if hasattr(status_to_write, "value") else str(status_to_write)
+        
+        # 序列化 metadata 字典為 JSON 字串
+        meta_json = json.dumps(item.metadata, ensure_ascii=False) if item.metadata else "{}"
+
+        # 批次更新：C(狀態), I(指標), J(限制), L(分數), M(摘要), N(推演), O(metadata)
         update_cells = [
             {"range": f"C{target_row}", "values": [[status_val]]},
+            {"range": f"I{target_row}", "values": [[item.metrics or ""]]},
+            {"range": f"J{target_row}", "values": [[item.limitations or ""]]},
             {"range": f"L{target_row}", "values": [[item.verified_score or item.raw_score]]},
             {"range": f"M{target_row}", "values": [[item.editorial_summary or ""]]},
             {"range": f"N{target_row}", "values": [[item.cross_impact_notes or ""]]},
+            {"range": f"O{target_row}", "values": [[meta_json]]},  # <-- 加入 O 欄寫入！
         ]
         self.worksheet.batch_update(update_cells)
         return True
