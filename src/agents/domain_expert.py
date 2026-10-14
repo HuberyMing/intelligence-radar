@@ -3,8 +3,8 @@ from google import genai
 from pydantic import BaseModel, Field
 
 from src.agents.base import BaseAgent
-from src.core.models import IntelligenceItem
 from src.core.harmonizer import DataHarmonizer
+from src.core.models import IntelligenceItem
 
 # =====================================================================
 # 2. Domain Expert Agent (Day 14): 深度指標萃取與限制挑戰
@@ -77,13 +77,19 @@ class DomainExpertAgent(BaseAgent):
         # analysis = ExpertAnalysisResult.model_validate_json(response.text)
 
         # 回填領域核心資料模型
-        # 安全轉換 0-100 為 1-5
-        item.verified_score = DataHarmonizer.scale_100_to_5(result.verified_score)
+        # 1. 評分安全轉換為 1-5 星級並回填
+        star_score = DataHarmonizer.scale_100_to_5(result.verified_score)
+        item.verified_score = star_score
         item.metadata["expert_raw_100_score"] = result.verified_score
-
-        item.metrics = result.metrics or item.metrics
-        item.limitations = result.limitations or item.limitations
-
+        item.metadata["expert_used_model"] = used_model
         item.metadata["expert_takeaway"] = result.technical_takeaway
+
+        # 2. 正確取用 key_metrics，並組裝為字串回填
+        if result.key_metrics:
+            item.metrics = " | ".join(result.key_metrics)
+
+        # 3. limitations 同步組裝為字串回填
+        if result.limitations:
+            item.limitations = " | ".join(result.limitations)
 
         return item
