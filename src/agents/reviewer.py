@@ -5,8 +5,9 @@ from google import genai
 from pydantic import BaseModel, Field
 
 from src.agents.base import BaseAgent  # 1. 匯入 BaseAgent
-from src.core.models import IntelligenceItem, ItemStatus
 from src.core.harmonizer import DataHarmonizer
+from src.core.models import IntelligenceItem, ItemStatus
+
 
 # =====================================================================
 # 1. Reviewer Agent (Day 13): 初審評分與二分流決策
