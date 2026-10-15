@@ -49,6 +49,7 @@ jobs:
           SPREADSHEET_KEY: ${{ secrets.SPREADSHEET_KEY }}
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
+          # python -m src.services.pipeline
           python run_pipeline.py
 
       # =========================================================================
