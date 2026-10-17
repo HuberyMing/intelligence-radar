@@ -29,12 +29,29 @@ print(f"   成功撈取條目 {locked_item.entry_id}，試算表上的狀態已�
 
 # 3. 模擬 ADK 審核完畢，回填分數與摘要 (PROCESSED)
 print("\n3. 模擬審核通過，回填資料並轉為 PROCESSED...")
-success = adapter.update_item_status(
-    entry_id=locked_item.entry_id,
-    new_status=ItemStatus.PROCESSED,
-    verified_score=5,
-    editorial_summary="資深編輯確認：狀態鎖定機制運行完美，具備生產級強健度。",
-    cross_impact_notes="可推廣至後續所有非同步 Agent 排程管線。",
+# success = adapter.update_item_status(
+#     entry_id=locked_item.entry_id,
+#     new_status=ItemStatus.PROCESSED,
+#     verified_score=5,
+#     editorial_summary="資深編輯確認：狀態鎖定機制運行完美，具備生產級強健度。",
+#     cross_impact_notes="可推廣至後續所有非同步 Agent 排程管線。",
+# )
+# assert success is True
+
+# test_adapter_workflow.py (修改第 3 步驟)
+# 3. 模擬審核通過，回填資料並轉為 PROCESSED
+locked_item.status = ItemStatus.PROCESSED
+locked_item.verified_score = 5
+locked_item.editorial_summary = (
+    "【極客核心】驗證領域模型風格 B 的資料回填與狀態同步合約。"
 )
-assert success is True
+locked_item.cross_impact_notes = (
+    "可推廣至後續所有非同步 Agent 排程管線。"
+)
+
+# 直接傳入整顆領域物件
+success = adapter.update_item_status(locked_item)
+
+assert success, "狀態回填失敗！"
+print("3. 狀態成功回填為 PROCESSED！")
 print("🎉【驗證完成】請至 Google Sheets 查看該行資料：狀態轉綠 (PROCESSED)，第 L、M、N 欄已精確回填！")
