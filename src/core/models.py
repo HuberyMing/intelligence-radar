@@ -2,7 +2,7 @@
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -78,4 +78,22 @@ class IntelligenceItem(BaseModel):
         description="以字典儲存特定信源專屬的擴充屬性"
     )
 
-    
+
+# src/core/models.py (節錄擴展)
+class AgentSpan(BaseModel):
+    """單一代理人執行節點的追蹤區間 (Span)"""
+    agent_name: str = Field(description="代理人名稱 (Reviewer, DomainExpert, Synthesizer, Editor)")
+    started_at: datetime = Field(default_factory=datetime.utcnow)
+    duration_ms: int = Field(description="執行耗時 (毫秒)")
+    prompt_tokens: int = Field(default=0, description="輸入 Token 數")
+    completion_tokens: int = Field(default=0, description="輸出 Token 數")
+    decision: Optional[str] = Field(default=None, description="核心決策 (例如 PASS / ARCHIVED)")
+    thought_process: Optional[str] = Field(default=None, description="思維鏈 (Chain-of-Thought) 摘要")
+    error: Optional[str] = Field(default=None, description="例外訊息 (若執行失敗)")
+
+class ExecutionTrace(BaseModel):
+    """單筆情資處理的完整追蹤鏈 (Trace)"""
+    trace_id: str
+    entry_id: str
+    total_duration_ms: int = 0
+    spans: List[AgentSpan] = Field(default_factory=list)

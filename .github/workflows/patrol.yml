@@ -51,6 +51,14 @@ jobs:
         run: |
           python run_pipeline.py
 
+      - name: Upload Agent Execution Traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-execution-traces
+          path: logs/traces/*.jsonl
+          retention-days: 7
+
       - name: Clean up Credentials
         if: always() # 無論執行成功或失敗皆強制執行
         run: |

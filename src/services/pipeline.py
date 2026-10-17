@@ -1,6 +1,9 @@
 # src/services/pipeline.py
+import datetime
+import json
 import logging
 import time
+from pathlib import Path
 
 from google import genai
 from tenacity import retry, stop_after_attempt, wait_exponential
@@ -10,6 +13,7 @@ from src.agents.editor import EditorAgent
 from src.agents.reviewer import ReviewerAgent
 from src.agents.synthesizer import SynthesizerAgent
 from src.core.models import IntelligenceItem, ItemStatus
+from src.core.tracer import trace_agent_step
 
 logger = logging.getLogger(__name__)
 
@@ -80,3 +84,37 @@ class IntelligencePipeline:
             item.status = ItemStatus.ERROR
             item.metadata["error_reason"] = err_str
             return item
+
+# src/services/pipeline.py (節錄)
+
+class ReviewerNode:
+    @trace_agent_step("Reviewer")
+    def evaluate(self, item: IntelligenceItem) -> tuple[IntelligenceItem, bool]:
+        # 調用 LLM 評估邏輯
+        ...
+        return item, True
+
+class DomainExpertNode:
+    @trace_agent_step("DomainExpert")
+    def extract_metrics(self, item: IntelligenceItem) -> tuple[IntelligenceItem, bool]:
+        # 調用 LLM 指標萃取
+        ...
+        return item, True
+
+
+def dump_traces(items: list[IntelligenceItem]):
+    log_dir = Path("logs/traces")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    trace_file = log_dir / f"trace_{today_str}.jsonl"
+
+    with trace_file.open("a", encoding="utf-8") as f:
+        for item in items:
+            record = {
+                "entry_id": item.entry_id,
+                "source_title": item.source_title,
+                "status": item.status,
+                "verified_score": item.verified_score,
+                "traces": item.metadata.get("traces", [])
+            }
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
