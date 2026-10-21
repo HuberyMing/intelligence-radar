@@ -1,8 +1,9 @@
 # src/services/pipeline.py
-import datetime
 import json
 import logging
+import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from google import genai
@@ -13,7 +14,11 @@ from src.agents.editor import EditorAgent
 from src.agents.reviewer import ReviewerAgent
 from src.agents.synthesizer import SynthesizerAgent
 from src.core.models import IntelligenceItem, ItemStatus
-from src.core.tracer import trace_agent_step
+
+# 確保 logs/traces 目錄存在
+os.makedirs("logs/traces", exist_ok=True)
+
+
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +41,47 @@ class IntelligencePipeline:
         """防禦性單一階段執行器"""
         return stage_fn(item)
 
+
+    def _record_trace(self, item, stage_name: str, duration: float, error=None):
+        """將單一 Agent 執行軌跡追加到 metadata 與本地日誌中"""
+        span = {
+            "stage": stage_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "duration_sec": round(duration, 2),
+            "status": "ERROR" if error else "SUCCESS",
+            "error": str(error) if error else None,
+        }
+        if "execution_trace" not in item.metadata:
+            item.metadata["execution_trace"] = []
+        item.metadata["execution_trace"].append(span)
+
+        # 同步寫入本地 JSONL 檔案供 Streamlit Inspector 讀取！
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        trace_file = f"logs/traces/trace_{today_str}.jsonl"
+        with open(trace_file, "a", encoding="utf-8") as f:
+            log_entry = {
+                "entry_id": item.entry_id,
+                "source_title": item.source_title,
+                "span": span,
+            }
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+
+    def _execute_stage_with_trace(self, stage_name: str, stage_fn, item):
+        """無侵入式 Trace 包覆器"""
+        start_time = time.time()
+        err = None
+        
+        try:
+            # 調用原本具備 tenacity retry 的執行器
+            return self._execute_stage_with_retry(stage_fn, item)
+        except Exception as e:
+            err = e
+            raise e
+        finally:
+            duration = time.time() - start_time
+            self._record_trace(item, stage_name, duration, error=err)
+
+
     def process_item(self, item: IntelligenceItem) -> IntelligenceItem:
         """
         執行單一條目的完整多代理人串接管線。
@@ -44,8 +90,11 @@ class IntelligencePipeline:
 
         try:
             # 1. Reviewer 初審: 守門員審核與 Early-exit 分流 (帶重試)
-            item, should_continue = self._execute_stage_with_retry(
-                self.reviewer.evaluate, item
+            # item, should_continue = self._execute_stage_with_retry(
+            #     self.reviewer.evaluate, item
+            # )
+            item, should_continue = self._execute_stage_with_trace(
+                "Reviewer", self.reviewer.evaluate, item
             )
             if not should_continue:
                 logger.warning(f"條目 [{item.entry_id}] 未達門檻 (得分: {item.raw_score})，熔斷歸檔。")
@@ -54,17 +103,22 @@ class IntelligencePipeline:
 
             # 2. Domain Expert 專家提煉 (帶重試)
             logger.info(f"條目 [{item.entry_id}] 通過初審，進入 Domain Expert 深入萃取。")
-            item = self._execute_stage_with_retry(self.expert.analyze, item)
+            # item = self._execute_stage_with_retry(self.expert.analyze, item)
+            item = self._execute_stage_with_trace("DomainExpert", self.expert.analyze, item)
             time.sleep(12)
 
             # 3. Synthesizer 跨領域推演: 綜合研判與二階推演 (帶重試)
             logger.info(f"條目 [{item.entry_id}] 進入 Synthesizer 進行跨領域影響推演。")
-            item = self._execute_stage_with_retry(self.synthesizer.synthesize, item)
+            # item = self._execute_stage_with_retry(self.synthesizer.synthesize, item)
+            item = self._execute_stage_with_trace(
+                "Synthesizer", self.synthesizer.synthesize, item
+            )
             time.sleep(12)
 
             # 4. Editor 總編潤飾: 編定稿與排版成型 (帶重試)
             logger.info(f"條目 [{item.entry_id}] 進入 Editor 進行最終摘要定稿。")
-            item = self._execute_stage_with_retry(self.editor.edit, item)
+            # item = self._execute_stage_with_retry(self.editor.edit, item)
+            item = self._execute_stage_with_trace("Editor", self.editor.edit, item)
 
             # 5. 標記處理完成
             item.status = ItemStatus.PROCESSED
@@ -84,22 +138,6 @@ class IntelligencePipeline:
             item.status = ItemStatus.ERROR
             item.metadata["error_reason"] = err_str
             return item
-
-# src/services/pipeline.py (節錄)
-
-class ReviewerNode:
-    @trace_agent_step("Reviewer")
-    def evaluate(self, item: IntelligenceItem) -> tuple[IntelligenceItem, bool]:
-        # 調用 LLM 評估邏輯
-        ...
-        return item, True
-
-class DomainExpertNode:
-    @trace_agent_step("DomainExpert")
-    def extract_metrics(self, item: IntelligenceItem) -> tuple[IntelligenceItem, bool]:
-        # 調用 LLM 指標萃取
-        ...
-        return item, True
 
 
 def dump_traces(items: list[IntelligenceItem]):
