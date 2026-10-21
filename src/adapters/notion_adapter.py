@@ -1,8 +1,8 @@
 # src/adapters/notion_adapter.py
 from __future__ import annotations
 
-import uuid
 import logging
+import uuid
 from typing import Any
 
 from notion_client import Client
