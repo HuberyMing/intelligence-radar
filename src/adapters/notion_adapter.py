@@ -5,6 +5,7 @@ import logging
 import uuid
 from typing import Any
 
+import requests  # 引入 requests
 from notion_client import Client
 from notion_client.errors import APIResponseError
 
@@ -13,57 +14,95 @@ from src.ports.knowledge_sync import KnowledgeSyncPort
 
 logger = logging.getLogger(__name__)
 
+
 class NotionSyncAdapter(KnowledgeSyncPort):
     def __init__(self, auth_token: str, database_id: str):
+        self.auth_token = auth_token
         self.client = Client(auth=auth_token)
-        self.database_id = database_id
+        # 確保 database_id 格式乾淨且轉為標準 UUID
+        raw_id = database_id.strip().replace("-", "")
+        self.database_id = str(uuid.UUID(raw_id))
 
     def _find_page_by_entry_id(self, entry_id: str) -> str | None:
         """依據 Entry ID 查詢是否已存在該筆情資（確保冪等性）"""
-        try:
-            # # 舊版寫法
-            # response = self.client.databases.query(
-            #     database_id=self.database_id,
-            #     filter={
-            #         "property": "Entry ID",
-            #         "rich_text": {
-            #             "equals": str(entry_id)
-            #         }
-            #     }
-            # )
+        # clean_db_id = self.database_id.strip().replace("-", "")
+        # url = f"https://api.notion.com/v1/databases/{clean_db_id}/query"
+        url = f"https://api.notion.com/v1/databases/{self.database_id}/query"
 
-            # # 新版寫法：改用 client.request 直接查詢
-            # # 使用 client.request 既不會受到 SDK 物件命名改版的影響，又能 100% 維持 Notion 官方 API 查詢語意！
-            # response = self.client.request(
-            #     path=f"databases/{self.database_id}/query",
-            #     method="POST",
-            #     body={"filter": {"property": "Entry ID", "rich_text": {"equals": entry_id}}},
-            # )
-
-            # 1. 確保 database_id 格式為合法的標準 UUID (例如：3f44e1c2-03bf-8097-815f-ef01e424ddc1)
-            raw_id = self.database_id.strip().replace("-", "")
-            formatted_db_id = str(uuid.UUID(raw_id))
-            
-            # 2. 呼叫 query endpoint
-            response = self.client.request(
-                path=f"databases/{formatted_db_id}/query",
-                method="POST",
-                body={
-                    "filter": {
-                        "property": "Entry ID",
-                        "rich_text": {
-                            "equals": str(entry_id)
-                        }
-                    }
-                }
-            )
-
-            results = response.get("results", [])
-            return results[0]["id"] if results else None
+        headers = {
+            "Authorization": f"Bearer {self.client.options.auth}",
+            "Notion-Version": "2022-06-28",
+            "Content-Type": "application/json",
+        }
         
-        except APIResponseError as e:
-            logger.error(f"查詢 Notion 資料庫失敗: {e}")
+        # 查詢具有特定 Entry ID 的 Page
+        payload = {
+            "filter": {
+                "property": "Entry ID",
+                "rich_text": {
+                    "equals": str(entry_id).strip()
+                }
+            }
+        }
+
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=10)
+            if res.status_code == 200:
+                results = res.json().get("results", [])
+                return results[0]["id"] if results else None
+            else:
+                logger.error(f"查詢 Notion 資料庫失敗 [{res.status_code}]: {res.text}")
+                return None
+        except Exception as e:
+            logger.error(f"查詢連線失敗: {e}")
             return None
+
+    # def _find_page_by_entry_id(self, entry_id: str) -> str | None:
+    #     """依據 Entry ID 查詢是否已存在該筆情資（確保冪等性）"""
+    #     try:
+    #         # # 舊版寫法
+    #         # response = self.client.databases.query(
+    #         #     database_id=self.database_id,
+    #         #     filter={
+    #         #         "property": "Entry ID",
+    #         #         "rich_text": {
+    #         #             "equals": str(entry_id)
+    #         #         }
+    #         #     }
+    #         # )
+
+    #         # # 新版寫法：改用 client.request 直接查詢
+    #         # # 使用 client.request 既不會受到 SDK 物件命名改版的影響，又能 100% 維持 Notion 官方 API 查詢語意！
+    #         # response = self.client.request(
+    #         #     path=f"databases/{self.database_id}/query",
+    #         #     method="POST",
+    #         #     body={"filter": {"property": "Entry ID", "rich_text": {"equals": entry_id}}},
+    #         # )
+
+    #         # 1. 確保 database_id 格式為合法的標準 UUID (例如：3f44e1c2-03bf-8097-815f-ef01e424ddc1)
+    #         raw_id = self.database_id.strip().replace("-", "")
+    #         formatted_db_id = str(uuid.UUID(raw_id))
+            
+    #         # 2. 呼叫 query endpoint
+    #         response = self.client.request(
+    #             path=f"databases/{formatted_db_id}/query",
+    #             method="POST",
+    #             body={
+    #                 "filter": {
+    #                     "property": "Entry ID",
+    #                     "rich_text": {
+    #                         "equals": str(entry_id)
+    #                     }
+    #                 }
+    #             }
+    #         )
+
+    #         results = response.get("results", [])
+    #         return results[0]["id"] if results else None
+        
+    #     except APIResponseError as e:
+    #         logger.error(f"查詢 Notion 資料庫失敗: {e}")
+    #         return None
 
 
     def _build_properties(self, item: IntelligenceItem) -> dict[str, Any]:
