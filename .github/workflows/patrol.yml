@@ -11,7 +11,7 @@ jobs:
   patrol:
     name: Run Intelligence Pipeline
     runs-on: ubuntu-latest
-    timeout-minutes: 15 # 超過 15 分鐘強制中斷，防止死鎖掛起
+    timeout-minutes: 30 # 超過 30 分鐘強制中斷，防止死鎖掛起
 
     steps:
       - name: Checkout Code
@@ -56,7 +56,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: agent-execution-traces
-          path: logs/traces/*.jsonl
+          path: logs/traces/
           retention-days: 7
 
       - name: Clean up Credentials
