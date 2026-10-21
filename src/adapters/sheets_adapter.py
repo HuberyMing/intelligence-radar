@@ -102,7 +102,8 @@ class SheetsAdapter:
 
         # Google Sheets 列號由 1 開始，Row 1 為表頭，故資料從 Row 2 起算
         for idx, record in enumerate(all_records, start=2):
-            if record.get("status") == ItemStatus.PENDING.value:
+            # if record.get("status") == ItemStatus.PENDING.value:
+            if str(record.get("status", "")).strip().upper() == ItemStatus.PENDING.value:
                 # 反序列化 metadata
                 raw_meta = record.get("metadata", "{}")
                 metadata_dict = (
