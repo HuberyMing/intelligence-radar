@@ -72,14 +72,22 @@ class DataHarmonizer:
         # 最終 fallback：若無法辨別則給當下 UTC 時間
         return datetime.now(timezone.utc)
 
+
     @staticmethod
     def normalize(raw_payload: Dict[str, Any]) -> IntelligenceItem:
         """
         將前端輸入標準化為完整 15 欄合約
         自動處理預設值、欄位映射與型別容錯
         """
-        # 1. 提取或生成主鍵與時間 (容錯解析)
-        entry_id = raw_payload.get("entry_id") or str(uuid.uuid4())[:8]
+        # 1. 提取或生成主鍵與時間 (防禦性解析：防範 float('inf') 或非字串型態)
+        raw_entry_id = raw_payload.get("entry_id")
+        
+        # 若為空值、None 或因科學記號誤轉成 inf，則重新賦值
+        if raw_entry_id is None or str(raw_entry_id).strip() in ("", "inf", "-inf", "nan"):
+            entry_id = str(uuid.uuid4())[:8]
+        else:
+            entry_id = str(raw_entry_id).strip()
+
         timestamp = DataHarmonizer._parse_timestamp(raw_payload.get("timestamp"))
 
         # 2. 狀態容錯對齊 (若原本有狀態則保留，若無則預設為 PENDING)
