@@ -50,10 +50,24 @@ class SheetsAdapter:
         row_data = SheetSerializer.to_row(item)
         self.worksheet.append_row(row_data)
 
+
+    def _safe_get_all_records(self) -> list[dict]:
+        """安全取得工作表所有紀錄，防止 82e93867 等英數字串被誤判為科學記號溢位成 inf"""
+        try:
+            # gspread v6.x+ 標準寫法：忽略所有欄位的數值自動轉換，全數保留原始文字
+            return self.worksheet.get_all_records(numericise_ignore=["all"])
+        except TypeError:
+            try:
+                # 舊版 gspread (v5.x) fallback 寫法
+                return self.worksheet.get_all_records(numericise_data=False)
+            except TypeError:
+                # 若都不支援，使用預設值
+                return self.worksheet.get_all_records()
+
     def fetch_processed_items(self, min_score: int = 4) -> list[IntelligenceItem]:
         """從 raw_feed 工作表中提取 status 為 PROCESSED 且 verified_score >= min_score 的高價值情報。"""
         try:
-            records = self.worksheet.get_all_records()
+            records = self._safe_get_all_records()
         except Exception as e:
             logger.error(f"讀取工作表資料失敗: {e}")
             return []
@@ -96,7 +110,7 @@ class SheetsAdapter:
         拉取所有待處理 (PENDING) 條目
         若 auto_lock=True，則在回傳前就地將試算表狀態改為 ANALYZING 進行鎖定
         """
-        all_records = self.worksheet.get_all_records()
+        all_records = self._safe_get_all_records()
         pending_items: List[IntelligenceItem] = []
         rows_to_lock: List[int] = []
 
@@ -143,6 +157,7 @@ class SheetsAdapter:
         # 內部直接從 item 提取各欄位，外界呼叫極致簡潔
         target_row = self._find_row_by_entry_id(item.entry_id)
         if not target_row:
+            logger.error(f"❌ 回寫失敗：在 Google Sheet A 欄找不到對應的 entry_id [{item.entry_id}]！")
             return False
 
         status_val = status_to_write.value if hasattr(status_to_write, "value") else str(status_to_write)
@@ -161,6 +176,7 @@ class SheetsAdapter:
             {"range": f"O{target_row}", "values": [[meta_json]]},  # <-- 加入 O 欄寫入！
         ]
         self.worksheet.batch_update(update_cells)
+        logger.info(f"✅ 成功回寫 Google Sheet 第 {target_row} 列 [{item.entry_id}]")
         return True
 
     # src/adapters/sheets_adapter.py
