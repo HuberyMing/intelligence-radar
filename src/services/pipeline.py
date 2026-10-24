@@ -56,6 +56,7 @@ class IntelligencePipeline:
         item.metadata["execution_trace"].append(span)
 
         # 同步寫入本地 JSONL 檔案供 Streamlit Inspector 讀取！
+        # 這裡已經即時將每一步的 Trace 寫入 logs/traces/trace_YYYY-MM-DD.jsonl
         today_str = datetime.now().strftime("%Y-%m-%d")
         trace_file = f"logs/traces/trace_{today_str}.jsonl"
         with open(trace_file, "a", encoding="utf-8") as f:
