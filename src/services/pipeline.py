@@ -40,23 +40,40 @@ class IntelligencePipeline:
     def _execute_stage_with_retry(self, stage_fn, item):
         """防禦性單一階段執行器"""
         return stage_fn(item)
-
+    
 
     def _record_trace(self, item, stage_name: str, duration: float, error=None):
-        """將單一 Agent 執行軌跡追加到 metadata 與本地日誌中"""
+        """將單一 Agent 執行軌跡追加到 metadata 與本地日誌中（含思考鏈輸出預覽）"""
+        
+        # 依階段提取該 Agent 剛產出的思維摘要
+        output_preview = ""
+        if stage_name == "Reviewer":
+            score_text = f"評分: {item.raw_score} 分" if hasattr(item, "raw_score") else ""
+            reason = item.metadata.get("reviewer_reason") or "通過初審"
+            output_preview = f"{score_text} | 審核結果: {reason}"
+        elif stage_name == "DomainExpert":
+            m = item.metrics or "無特殊量化指標"
+            lim = item.limitations or "無特殊技術限制"
+            output_preview = f"【指標】{m}\n【限制】{lim}"
+        elif stage_name == "Synthesizer":
+            output_preview = item.cross_impact_notes or "無跨領域推演"
+        elif stage_name == "Editor":
+            output_preview = item.editorial_summary or "無定稿摘要"
+
         span = {
             "stage": stage_name,
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "duration_sec": round(duration, 2),
             "status": "ERROR" if error else "SUCCESS",
             "error": str(error) if error else None,
+            "output_preview": output_preview,  # 🌟 加入關鍵的思考輸出文字！
         }
+        
         if "execution_trace" not in item.metadata:
             item.metadata["execution_trace"] = []
         item.metadata["execution_trace"].append(span)
 
-        # 同步寫入本地 JSONL 檔案供 Streamlit Inspector 讀取！
-        # 這裡已經即時將每一步的 Trace 寫入 logs/traces/trace_YYYY-MM-DD.jsonl
+        # 即時寫入本地 JSONL
         today_str = datetime.now().strftime("%Y-%m-%d")
         trace_file = f"logs/traces/trace_{today_str}.jsonl"
         with open(trace_file, "a", encoding="utf-8") as f:
