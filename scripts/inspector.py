@@ -1,117 +1,135 @@
 # scripts/inspector.py
-from __future__ import annotations
-
 import json
 from pathlib import Path
-
 import streamlit as st
 
 st.set_page_config(
-    page_title="Agent Pipeline Inspector",
-    page_icon="📡",
-    layout="wide"
-)
+    page_title="Radar Inspector", 
+    page_icon="📡", 
+    layout="wide")
 
-# 1. 載入並快取追蹤紀錄
-@st.cache_data
-def load_trace_files() -> dict[str, Path]:
-    log_dir = Path("logs/traces")
-    if not log_dir.exists():
-        return {}
-    files = sorted(log_dir.glob("trace_*.jsonl"), reverse=True)
-    return {f.stem.replace("trace_", ""): f for f in files}
-
-def parse_trace_data(file_path: Path) -> list[dict]:
-    records = []
-    with file_path.open("r", encoding="utf-8") as f:
-        for line in f:
-            if line.strip():
-                records.append(json.loads(line))
-    return records
-
-# 2. 側邊欄：巡檢批次與條件過濾
 st.sidebar.title("📡 Radar Inspector")
-available_dates = load_trace_files()
 
-if not available_dates:
-    st.warning("⚠️ 尚未偵測到任何追蹤日誌 (logs/traces/trace_*.jsonl)！請先執行巡航管線。")
+# 1. 動態掃描 logs/traces 目錄下的所有批次
+trace_dir = Path("logs/traces")
+trace_files = sorted(list(trace_dir.glob("trace_*.jsonl")), reverse=True)
+
+if not trace_files:
+    st.warning("⚠️ 尚未找到任何 Trace 紀錄檔，請先執行 pipeline 產生日誌。")
     st.stop()
 
-selected_date = st.sidebar.selectbox("📅 選擇巡邏批次", list(available_dates.keys()))
-raw_data = parse_trace_data(available_dates[selected_date])
+# 提取日期列表
+date_options = [f.stem.replace("trace_", "") for f in trace_files]
+selected_date = st.sidebar.selectbox("📅 選擇巡邏批次", date_options)
 
+selected_file = trace_dir / f"trace_{selected_date}.jsonl"
+
+# 2. 讀取並將同一情資的 Spans 聚合（以 entry_id 為單位）
+raw_spans = []
+if selected_file.exists():
+    with open(selected_file, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                try:
+                    raw_spans.append(json.loads(line))
+                except Exception:
+                    continue
+
+# 聚合邏輯：將同一個 entry_id 的所有 Span 打包在一起
+aggregated_items = {}
+for entry in raw_spans:
+    eid = entry.get("entry_id")
+    if not eid:
+        continue
+    if eid not in aggregated_items:
+        aggregated_items[eid] = {
+            "entry_id": eid,
+            "source_title": entry.get("source_title", "Untitled"),
+            "spans": [],
+            "status": "ARCHIVED",  # 預設
+        }
+    
+    # 支援讀取 span 或舊格式 traces
+    if "span" in entry:
+        aggregated_items[eid]["spans"].append(entry["span"])
+    elif "traces" in entry:
+        aggregated_items[eid]["spans"].extend(entry.get("traces", []))
+
+# 判定情資最終狀態：如果跑過了 Editor 且成功，代表是 PROCESSED
+for eid, item in aggregated_items.items():
+    stage_names = [s.get("stage") for s in item["spans"]]
+    if "Editor" in stage_names:
+        item["status"] = "PROCESSED"
+    elif any(s.get("status") == "ERROR" for s in item["spans"]):
+        item["status"] = "ERROR"
+    else:
+        item["status"] = "ARCHIVED"
+
+items_list = list(aggregated_items.values())
+
+# 3. 側邊欄過濾控制項
 status_filter = st.sidebar.multiselect(
     "🏷️ 狀態過濾",
     options=["PROCESSED", "ARCHIVED", "ERROR"],
-    default=["PROCESSED", "ARCHIVED", "ERROR"]
+    default=["PROCESSED", "ARCHIVED", "ERROR"]  # 預設全選，絕不漏看
 )
+
 search_query = st.sidebar.text_input("🔍 搜尋標題或 entry_id", "")
 
-filtered_data = [
-    item for item in raw_data
-    if item.get("status") in status_filter
-    and (search_query.lower() in item.get("source_title", "").lower() or search_query in item.get("entry_id", ""))
+filtered_items = [
+    item for item in items_list
+    if item["status"] in status_filter
+    and (search_query.lower() in item["source_title"].lower() or search_query.lower() in item["entry_id"].lower())
 ]
 
-# 3. 主畫面：指標卡片概覽
+# 4. 頂部儀表板指標 (Metrics)
 st.title(f"巡航除錯檢視：{selected_date}")
 
-col1, col2, col3, col4 = st.columns(4)
-total_count = len(raw_data)
-processed_count = sum(1 for d in raw_data if d.get("status") == "PROCESSED")
-pass_rate = (processed_count / total_count * 100) if total_count > 0 else 0
-avg_score = (
-    sum(d.get("verified_score", 0) for d in raw_data if d.get("verified_score")) / total_count
-) if total_count > 0 else 0
+total_count = len(items_list)
+processed_count = sum(1 for i in items_list if i["status"] == "PROCESSED")
+pass_rate = (processed_count / total_count * 100) if total_count > 0 else 0.0
 
+col1, col2, col3 = st.columns(3)
 col1.metric("採集情資總數", f"{total_count} 筆")
 col2.metric("通過初審 (PROCESSED)", f"{processed_count} 筆")
 col3.metric("初審通過率", f"{pass_rate:.1f}%")
-col4.metric("平均技術評分", f"{avg_score:.2f} / 5.0")
 
 st.divider()
 
-# 4. 條目列表與思考鏈明細
-st.subheader("📑 情資審查串流與代理人思考鏈")
+# 5. 情資審查串流與代理人思考鏈渲染
+st.subheader("📄 情資審查串流與代理人思考鏈")
 
-for item in filtered_data:
-    status = item.get("status")
-    score = item.get("verified_score", "N/A")
-    title = item.get("source_title", "未命名標題")
-    entry_id = item.get("entry_id", "未知ID")
-
-    # 狀態標記與顏色區分
-    badge = "🟢 [PROCESSED]" if status == "PROCESSED" else ("🟡 [ARCHIVED]" if status == "ARCHIVED" else "🔴 [ERROR]")
-    
-    with st.expander(f"{badge} (Score: {score}) | {title} [{entry_id}]"):
-        st.markdown(f"**來源網址**：{item.get('source_url', '無')}")
-        
-        traces = item.get("traces", [])
-        if not traces:
-            st.info("此項目無代理人追蹤記錄。")
-            continue
-
-        # 呈現代理人依序執行的思考流
-        st.markdown("#### 🧠 代理人思考時間軸")
-        for idx, span in enumerate(traces, 1):
-            agent_name = span.get("agent_name")
-            duration = span.get("duration_ms", 0)
-            decision = span.get("decision", "OK")
-            thought = span.get("thought_process", "無詳細記錄")
-            err = span.get("error")
-
-            icon = "🤖"
-            if agent_name == "Reviewer":
-                icon = "⚖️"
-            elif agent_name == "DomainExpert":
-                icon = "🔬"
-            elif agent_name == "Synthesizer":
-                icon = "🔮"
-            elif agent_name == "Editor":
-                icon = "✍️"
-
-            st.markdown(f"**Step {idx}：{icon} {agent_name}** `({duration} ms)` — 決策: `{decision}`")
-            if err:
-                st.error(f"執行錯誤：{err}")
+if not filtered_items:
+    st.info("💡 目前篩選條件下無符合的情資項目，請調整側邊欄的過濾條件。")
+else:
+    for item in filtered_items:
+        with st.expander(f"【{item['status']}】 [{item['entry_id']}] {item['source_title']}", expanded=(item["status"] == "PROCESSED")):
+            st.markdown(f"**項目識別碼 (Entry ID):** `{item['entry_id']}`")
+            
+            # 依序展示該情資跑過的各個 Agent 階段
+            stages = item["spans"]
+            if not stages:
+                st.write("尚無詳細思考鏈軌跡。")
             else:
-                st.info(thought)
+                for idx, span in enumerate(stages, 1):
+                    stage_name = span.get("stage", f"Step {idx}")
+                    duration = span.get("duration_sec", 0)
+                    status_icon = "✅" if span.get("status") == "SUCCESS" else "❌"
+                    
+                    # 依階段賦予專屬圖示
+                    icons = {
+                        "Reviewer": "⚖️ Reviewer 初審守門員",
+                        "DomainExpert": "🔬 Domain Expert 領域提煉",
+                        "Synthesizer": "🔮 Synthesizer 跨領域推演",
+                        "Editor": "✍️ Editor 總編排版定稿",
+                    }
+                    display_title = icons.get(stage_name, f"階段: {stage_name}")
+                    
+                    st.markdown(f"#### Step {idx}: {display_title} ({status_icon} 耗時: `{duration}s`)")
+                    
+                    if span.get("error"):
+                        st.error(f"遭遇錯誤: {span.get('error')}")
+                    else:
+                        st.caption(f"執行時間: {span.get('timestamp')}")
+                    st.write("---")
