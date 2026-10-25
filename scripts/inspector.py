@@ -132,4 +132,13 @@ else:
                         st.error(f"遭遇錯誤: {span.get('error')}")
                     else:
                         st.caption(f"執行時間: {span.get('timestamp')}")
+                        
+                        # 🌟 渲染各 Agent 的思考摘要與推演文字
+                        output_content = span.get("output_preview")
+                        if output_content:
+                            st.markdown("**🧠 代理人思考與萃取摘要：**")
+                            st.info(output_content)
+                        else:
+                            st.caption("*(此批次執行時尚未擷取文字預覽)*")
+                            
                     st.write("---")
