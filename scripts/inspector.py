@@ -1,6 +1,7 @@
 # scripts/inspector.py
 import json
 from pathlib import Path
+
 import streamlit as st
 
 st.set_page_config(

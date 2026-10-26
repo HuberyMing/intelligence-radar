@@ -1,7 +1,10 @@
 # tests/conftest.py
 from datetime import datetime
+
 import pytest
+
 from src.core.models import IntelligenceItem, ItemStatus
+
 
 @pytest.fixture
 def sample_intelligence_item() -> IntelligenceItem:

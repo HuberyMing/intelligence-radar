@@ -1,7 +1,9 @@
 # tests/adapters/test_obsidian_adapter.py
 from pathlib import Path
+
 from src.adapters.obsidian_adapter import ObsidianVaultAdapter
 from src.core.models import IntelligenceItem
+
 
 def test_obsidian_sync_success(tmp_path: Path, sample_intelligence_item: IntelligenceItem):
     """驗證筆記檔案能夠正確生成，且 YAML Frontmatter 內容符合規格"""

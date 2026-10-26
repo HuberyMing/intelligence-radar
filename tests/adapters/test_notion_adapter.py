@@ -1,7 +1,8 @@
 # tests/adapters/test_notion_adapter.py
-from unittest.mock import MagicMock, patch
-import pytest
+from unittest.mock import patch
+
 from notion_client.errors import APIResponseError
+
 from src.adapters.notion_adapter import NotionSyncAdapter
 
 # 使用合法的 32 碼假 UUID
