@@ -43,6 +43,10 @@ jobs:
           # 設定嚴格權限避免外洩
           chmod 600 service_account.json
 
+      - name: Run Contract & Unit Tests
+        run: |
+          pytest tests/ -q
+
       - name: Execute Intelligence Pipeline
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
