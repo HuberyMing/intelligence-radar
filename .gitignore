@@ -7,6 +7,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .coverage
+htmlcov/
 
 # 敏感金鑰與環境變數 (絕對不能進 Git!)
 .env
