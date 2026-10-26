@@ -39,7 +39,7 @@ tags:
 
 ## 🔮 二階效應與跨領域衝擊
 > [!tip] 跨界推演
-> {{ item.second_order_effects if item.second_order_effects else "暫無推演。" }}
+> {{ item.cross_impact_notes or item.second_order_effects or "暫無推演。" }}
 
 ---
 ## 關聯實體

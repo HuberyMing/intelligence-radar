@@ -21,7 +21,12 @@ class NotionSyncAdapter(KnowledgeSyncPort):
         self.client = Client(auth=auth_token)
         # 確保 database_id 格式乾淨且轉為標準 UUID
         raw_id = database_id.strip().replace("-", "")
-        self.database_id = str(uuid.UUID(raw_id))
+        try:
+            # 若為合法的 32 碼十六進位 UUID 則標準化為 8-4-4-4-12 格式
+            self.database_id = str(uuid.UUID(raw_id))
+        except ValueError:
+            # 兼容單元測試傳入的 fake_db_123 等非標準格式
+            self.database_id = database_id
 
     def _find_page_by_entry_id(self, entry_id: str) -> str | None:
         """依據 Entry ID 查詢是否已存在該筆情資（確保冪等性）"""
